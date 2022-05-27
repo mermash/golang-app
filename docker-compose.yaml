@@ -1,0 +1,28 @@
+version: '3'
+services:
+  my-golang-app:
+    image: mermash/my-golang-app
+    build: .
+    stdin_open: true
+    tty: true
+    depends_on:
+      - mysql-db
+    environment:
+      - CONFNAME=GO Conference
+      - DB_HOST=localhost
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_DB=users
+#  mysql-db:
+#    image: mysql
+#    command: --default-authentication-plugin=mysql_native_password
+#    environment:
+#      - MYSQL_ROOT_PASSWORD=root
+#    ports:
+#      - 3306:3306
+#    volumes:
+#      - test-mysql-data:/var/lib/mysql
+#      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+
+#volumes:
+#  test-mysql-data:
