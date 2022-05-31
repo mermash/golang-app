@@ -34,7 +34,7 @@ services:
       - phpmyadmin
     environment:
       - CONFNAME=GO Conference
-      - DB_HOST=mysql-db
+      - DB_HOST=docker.for.mac.localhost
       - DB_PORT=3306
       - DB_USER=root
       - DB_PASSWORD=root
