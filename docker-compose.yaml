@@ -1,28 +1,44 @@
 version: '3'
 services:
+  mysql-db:
+    image: mysql
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      # - MYSQL_USER=test_user
+      # - MYSQL_PASSWORD=secret
+      # - MYSQL_DATABASE=my_golang_app
+    ports:
+      - 3306:3306
+    volumes:
+      - test-mysql-data:/var/lib/mysql
+      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+  phpmyadmin:
+    image: phpmyadmin
+    depends_on:
+      - mysql-db
+    restart: always
+    ports:
+      - 8080:80
+    environment:
+      - PMA_ARBITRARY=1
   my-golang-app:
     image: mermash/my-golang-app
     build: .
     stdin_open: true
     tty: true
+    restart: unless-stopped
     depends_on:
       - mysql-db
+      - phpmyadmin
     environment:
       - CONFNAME=GO Conference
-      - DB_HOST=localhost
+      - DB_HOST=mysql-db
+      - DB_PORT=3306
       - DB_USER=root
       - DB_PASSWORD=root
-      - DB_DB=users
-#  mysql-db:
-#    image: mysql
-#    command: --default-authentication-plugin=mysql_native_password
-#    environment:
-#      - MYSQL_ROOT_PASSWORD=root
-#    ports:
-#      - 3306:3306
-#    volumes:
-#      - test-mysql-data:/var/lib/mysql
-#      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - DB_DB=my_golang_app
 
-#volumes:
-#  test-mysql-data:
+volumes:
+  test-mysql-data:

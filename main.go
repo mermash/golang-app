@@ -22,7 +22,8 @@ var bookings = make([]UserData, 0)
 
 var dbUser = os.Getenv("DB_USER")
 var dbPassword = os.Getenv("DB_PASSWORD")
-var dbAddr = os.Getenv("DB_HOST")
+var dbHost = os.Getenv("DB_HOST")
+var dbPort = os.Getenv("DB_PORT")
 var dbDB = os.Getenv("DB_DB")
 
 type UserData struct {
@@ -40,9 +41,7 @@ func main() {
 
 	greetUsers()
 
-	fmt.Println(os.Getenv("DB_USER"))
-
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s?", dbUser, dbPassword, dbAddr, dbDB)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbUser, dbPassword, dbHost, dbPort, dbDB)
 	fmt.Println(dsn)
 	db, err := sql.Open("mysql", dsn)
 	defer db.Close()
@@ -164,7 +163,7 @@ func bookTicket(storage *sql.DB, userTickets uint, firstName string, lastName st
 }
 
 func sendTicket(user *UserData) {
-	time.Sleep(5 * time.Second)
+	time.Sleep(2 * time.Second)
 	var ticket = fmt.Sprintf("%v tickets for %v %v %v", user.numberOfTickets, *user.id, user.firstName, user.lastName)
 	fmt.Println("#################")
 	fmt.Printf("Sending ticket:\n %v\n to email address %v\n", ticket, user.email)
