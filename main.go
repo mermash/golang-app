@@ -2,11 +2,12 @@ package main
 
 import (
 	"booking-app/helper"
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
 	"os"
-	"sync"
+	"runtime"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -35,7 +36,7 @@ type UserData struct {
 	isOptedInForNewsLetter uint
 }
 
-var wg = sync.WaitGroup{}
+//var wg = sync.WaitGroup{}
 
 func main() {
 
@@ -58,40 +59,54 @@ func main() {
 		log.Fatal(err)
 	}
 
+	ctx, finish := context.WithCancel(context.Background())
+	defer finish()
 	input := make(chan *UserData, 1)
-	wg.Add(1)
-	go sendTicket(input)
+	//wg.Add(1)
+	for i := 0; i <= 10; i++ {
+		go sendTicket(ctx, input, i)
+	}
 
-	firstName, lastName, email, userTickets := getUserInput()
-	isValidName, isValidEmail, isValidTicketNumber := helper.ValidateUserInput(firstName, lastName, email, userTickets, remainingTickets)
+	for {
+		var confirmedExit string
+		fmt.Println("Do you want to exit [yes/no]?")
+		fmt.Scan(&confirmedExit)
 
-	if isValidName && isValidEmail && isValidTicketNumber {
-
-		err := bookTicket(db, input, userTickets, firstName, lastName, email)
-
-		if err != nil {
-			log.Fatal(err)
+		if confirmedExit == "yes" {
+			break
 		}
 
-		firstNames := getFirstNames()
-		fmt.Printf("The first names of bookings are: %v\n", firstNames)
+		firstName, lastName, email, userTickets := getUserInput()
+		isValidName, isValidEmail, isValidTicketNumber := helper.ValidateUserInput(firstName, lastName, email, userTickets, remainingTickets)
 
-		if remainingTickets == 0 {
-			fmt.Println("Our conference iis booked out. Come back next year.")
-		}
+		if isValidName && isValidEmail && isValidTicketNumber {
 
-	} else {
-		if !isValidName {
-			fmt.Println("first name or last name you entered is too short")
-		}
-		if !isValidEmail {
-			fmt.Println("email address you entered doesn't contain @ sign")
-		}
-		if !isValidTicketNumber {
-			fmt.Println("number of tickets you entered is invalid")
+			err := bookTicket(db, input, userTickets, firstName, lastName, email)
+
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			firstNames := getFirstNames()
+			fmt.Printf("The first names of bookings are: %v\n", firstNames)
+
+			if remainingTickets == 0 {
+				fmt.Println("Our conference iis booked out. Come back next year.")
+			}
+
+		} else {
+			if !isValidName {
+				fmt.Println("first name or last name you entered is too short")
+			}
+			if !isValidEmail {
+				fmt.Println("email address you entered doesn't contain @ sign")
+			}
+			if !isValidTicketNumber {
+				fmt.Println("number of tickets you entered is invalid")
+			}
 		}
 	}
-	wg.Wait()
+	//wg.Wait()
 }
 
 func greetUsers() {
@@ -160,26 +175,34 @@ func bookTicket(storage *sql.DB, output chan *UserData, userTickets uint, firstN
 	return nil
 }
 
-func sendTicket(input chan *UserData) {
+func sendTicket(ctx context.Context, input <-chan *UserData, workerIndex int) {
 
 	timer := time.NewTimer(10 * time.Minute)
 	defer func() {
 		if !timer.Stop() {
 			<-timer.C
 		}
+		fmt.Printf("End of worker %d\n", workerIndex)
 	}()
 
-	select {
-	case user := <-input:
-		var ticket = fmt.Sprintf("%v tickets for %v %v %v", user.numberOfTickets, *user.id, user.firstName, user.lastName)
-		fmt.Println("#################")
-		fmt.Printf("Sending ticket:\n %v\n to email address %v\n", ticket, user.email)
-		fmt.Println("################")
-	case timeOut := <-timer.C:
-		fmt.Printf("Timeout happends %s", timeOut.GoString())
-
+LOOP:
+	for {
+		select {
+		case <-ctx.Done():
+			break LOOP
+		case user := <-input:
+			var ticket = fmt.Sprintf("%v tickets for %v %v %v", user.numberOfTickets, *user.id, user.firstName, user.lastName)
+			fmt.Println("#################")
+			fmt.Printf("Worker number %d\n", workerIndex)
+			fmt.Printf("Sending ticket:\n %v\n to email address %v\n", ticket, user.email)
+			fmt.Println("################")
+		case timeOut := <-timer.C:
+			fmt.Printf("Timeout happends %s", timeOut.Local())
+		default:
+			runtime.Gosched()
+		}
 	}
-	wg.Done()
+	//wg.Done()
 }
 
 func insertData(db *sql.DB, user *UserData) (*int64, error) {
