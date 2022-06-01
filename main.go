@@ -58,33 +58,26 @@ func main() {
 		log.Fatal(err)
 	}
 
+	input := make(chan *UserData, 1)
+	wg.Add(1)
+	go sendTicket(input)
+
 	firstName, lastName, email, userTickets := getUserInput()
 	isValidName, isValidEmail, isValidTicketNumber := helper.ValidateUserInput(firstName, lastName, email, userTickets, remainingTickets)
 
 	if isValidName && isValidEmail && isValidTicketNumber {
 
-		lastID, err := bookTicket(db, userTickets, firstName, lastName, email)
+		err := bookTicket(db, input, userTickets, firstName, lastName, email)
 
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		userFromDb, err := getData(db, *lastID)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		wg.Add(1)
-		go sendTicket(userFromDb)
 
 		firstNames := getFirstNames()
 		fmt.Printf("The first names of bookings are: %v\n", firstNames)
 
 		if remainingTickets == 0 {
-			// end program
 			fmt.Println("Our conference iis booked out. Come back next year.")
-			//break
 		}
 
 	} else {
@@ -137,7 +130,7 @@ func getUserInput() (string, string, string, uint) {
 	return firstName, lastName, email, userTickets
 }
 
-func bookTicket(storage *sql.DB, userTickets uint, firstName string, lastName string, email string) (*int64, error) {
+func bookTicket(storage *sql.DB, output chan *UserData, userTickets uint, firstName, lastName, email string) error {
 	remainingTickets = remainingTickets - userTickets
 
 	var userData = UserData{
@@ -151,23 +144,41 @@ func bookTicket(storage *sql.DB, userTickets uint, firstName string, lastName st
 	lastID, err := insertData(storage, &userData)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
+
+	userFromDb, err := getData(storage, *lastID)
 
 	fmt.Printf("List of bookings is %v\n", bookings)
 
 	fmt.Printf("Thank you %v %v for bookng %v tickets. You will receive a confirmation email at %v\n", firstName, lastName, userTickets, email)
 	fmt.Printf("%v tickets remaining for %v\n", remainingTickets, conferenceName)
 
-	return lastID, nil
+	fmt.Printf("UserData: %v", userFromDb)
+	output <- userFromDb
+
+	return nil
 }
 
-func sendTicket(user *UserData) {
-	time.Sleep(2 * time.Second)
-	var ticket = fmt.Sprintf("%v tickets for %v %v %v", user.numberOfTickets, *user.id, user.firstName, user.lastName)
-	fmt.Println("#################")
-	fmt.Printf("Sending ticket:\n %v\n to email address %v\n", ticket, user.email)
-	fmt.Println("################")
+func sendTicket(input chan *UserData) {
+
+	timer := time.NewTimer(10 * time.Minute)
+	defer func() {
+		if !timer.Stop() {
+			<-timer.C
+		}
+	}()
+
+	select {
+	case user := <-input:
+		var ticket = fmt.Sprintf("%v tickets for %v %v %v", user.numberOfTickets, *user.id, user.firstName, user.lastName)
+		fmt.Println("#################")
+		fmt.Printf("Sending ticket:\n %v\n to email address %v\n", ticket, user.email)
+		fmt.Println("################")
+	case timeOut := <-timer.C:
+		fmt.Printf("Timeout happends %s", timeOut.GoString())
+
+	}
 	wg.Done()
 }
 
